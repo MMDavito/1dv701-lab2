@@ -13,11 +13,14 @@
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
  * A for handeling multithreaded connections.
  */
+
+
 public class WebServer1 {
     public static final int BUFSIZE = 1024;
     public static final int MYPORT = 8889;
@@ -32,6 +35,16 @@ public class WebServer1 {
             "HELLO FUCKING WORLD\n" +
             "</body>\n" +
             "</html>";
+
+
+    public final String okHeader = "HTTP/1.1 200 OK\r\n";
+    public final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
+
+    public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
+            "Connection: close\r\n";
+    public final String contLength = "Content-Length: ";
+    public final String emptySeperator = "\r\n";
+
 
     public static final String RETURNMESSAGE =
             "HTTP/1.1 200 OK\r\n" +
@@ -86,19 +99,39 @@ class ServerThread extends Thread {
 
     @Override
     public void run() {
-        long dead = System.currentTimeMillis();
-        final int alive = 2100;//Is alive if not dead for time
-        boolean triedCpr = false;
+StringBuilder retMessageBuilder = new StringBuilder();
         try {
             inputStream = new DataInputStream(this.socket.getInputStream());
             while (inputStream.available() == 0) {
                 System.out.println("STUPID");
             }
-            byte[] buf = new byte[bufsize];
-            while (inputStream.available() > 0 && buf[bufsize - 1] == 0) {
-                inputStream.read(buf); //TODO, analyse this
-            }^-
-            System.out.println(new String(buf));
+            boolean runIndefinitely = true;//ANALYSE UNTIL FALSE
+
+            while (runIndefinitely) {
+                runIndefinitely = false;
+                byte[] buf = new byte[bufsize];//Create buffer
+                //Read inputStream to buf while stream is streaming and buf is not full
+                while (inputStream.available() > 0 && buf[bufsize - 1] == 0) {
+                    inputStream.read(buf); //TODO, analyse this
+                }
+
+                //Extract information(get)
+                String rHeader = new String(buf);//receivedHeader
+                int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
+                if (getIndex >= 0) {
+                    String getInfo = extractInfo(rHeader, getIndex);
+                    System.out.println("Beutifull: \n" + getInfo);
+                }
+                System.out.println();
+                File indexFile = new File("src/user1/index.html");
+                String indexContent = htmlFileToString(indexFile);
+                System.out.println("INDEXXSAD");
+                System.out.println(indexContent);
+                System.out.println(indexContent);
+                System.out.println();
+
+            }
+
 
 
             outputStream = new DataOutputStream(this.socket.getOutputStream());
@@ -119,6 +152,57 @@ class ServerThread extends Thread {
         return;
 
     }
+
+    /**
+     * Could have used a arraylist for info sutch as ACCEPT
+     *
+     * @param header
+     * @param start  Index where start of substring
+     * @return <code>header</code> substringed until first \n
+     */
+    String extractInfo(String header, int start) {
+        String info = header.substring(start, header.indexOf('\n'));
+        return info;
+    }
+
+    String htmlFileToString(File htmlFile) {
+        StringBuilder stringBuilder = new StringBuilder();
+        String absPath = htmlFile.getAbsolutePath();
+        System.out.println("SHITEEEE");
+        System.out.println(absPath.substring(absPath.length() - 5));
+        System.out.println("");
+        if (!htmlFile.isFile() || !absPath.substring(absPath.length() - 5).equals(".html")) {
+            System.err.println(htmlFile.getAbsolutePath() + " is not an actual html file!");
+        } else {
+            try {
+                BufferedReader indexReader = new BufferedReader(new FileReader(htmlFile));
+                String line;
+                while ((line = indexReader.readLine()) != null) {
+                    stringBuilder.append(line);
+                }
+                indexReader.close();
+            } catch (IOException e) {
+                System.err.println(e);
+            }
+        }
+        return stringBuilder.toString();
+    }
+
+    /**
+     * Make algorithm better if time
+     *
+     * @param search
+     * @return
+     */
+    int findGet(String search) {
+        int ret = -1;
+        final String GET = "GET ";
+        ret = search.indexOf(GET);
+        return ret;
+    }
+
+
+    //TODO Remove
 
     /**
      * Trim the buffer to the last ellement not equal to NULL
