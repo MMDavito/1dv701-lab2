@@ -36,16 +36,6 @@ public class WebServer1 {
             "</body>\n" +
             "</html>";
 
-
-    public final String okHeader = "HTTP/1.1 200 OK\r\n";
-    public final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
-
-    public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
-            "Connection: close\r\n";
-    public final String contLength = "Content-Length: ";
-    public final String emptySeperator = "\r\n";
-
-
     public static final String RETURNMESSAGE =
             "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: text/html;charset=UTF-8\r\n" +
@@ -66,7 +56,7 @@ public class WebServer1 {
                     socket.getInetAddress().getHostAddress(), socket.getPort());
             //System.out.println("It is conNumber: " + (count += 1));
 
-            ServerThread serverThread = new ServerThread(socket, BUFSIZE, RETURNMESSAGE);
+            ServerThread serverThread = new ServerThread(socket, BUFSIZE);
             serverThread.start();
         }
     }
@@ -78,7 +68,17 @@ public class WebServer1 {
 class ServerThread extends Thread {
     Socket socket;
     int bufsize;
-    String message;
+    String retMessage = "";
+    boolean streamedPNG = false;
+
+    public final String okHeader = "HTTP/1.1 200 OK\r\n";
+    public final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
+
+    public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
+            "Connection: close\r\n";
+    public final String contLength = "Content-Length: ";
+    public final String emptySeperator = "\r\n";
+
 
     byte[] buf;
     InputStream inputStream;
@@ -89,17 +89,15 @@ class ServerThread extends Thread {
      *
      * @param socket
      * @param bufsize
-     * @param message
      */
-    public ServerThread(Socket socket, int bufsize, String message) {
+    public ServerThread(Socket socket, int bufsize) {
         this.socket = socket;
         this.bufsize = bufsize;
-        this.message = message;
     }
 
     @Override
     public void run() {
-StringBuilder retMessageBuilder = new StringBuilder();
+        StringBuilder retMessageBuilder = new StringBuilder();
         try {
             inputStream = new DataInputStream(this.socket.getInputStream());
             while (inputStream.available() == 0) {
@@ -114,43 +112,94 @@ StringBuilder retMessageBuilder = new StringBuilder();
                 while (inputStream.available() > 0 && buf[bufsize - 1] == 0) {
                     inputStream.read(buf); //TODO, analyse this
                 }
-
                 //Extract information(get)
                 String rHeader = new String(buf);//receivedHeader
                 int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
+
                 if (getIndex >= 0) {
+                    /**
+                     * HERE only implemented "GET", nest else if for implementation of "POST" and "PUT"
+                     */
                     String getInfo = extractInfo(rHeader, getIndex);
-                    System.out.println("Beutifull: \n" + getInfo);
-                }
-                System.out.println();
-                File indexFile = new File("src/user1/index.html");
-                String indexContent = htmlFileToString(indexFile);
-                System.out.println("INDEXXSAD");
-                System.out.println(indexContent);
-                System.out.println(indexContent);
-                System.out.println();
+                    getInfo = getInfo.substring(getInfo.indexOf('/'));
+                    getInfo = getInfo.substring(0, getInfo.indexOf(' '));
 
+                    File requestedFile = new File("src/resources" + getInfo);
+                    System.out.println(requestedFile.getAbsolutePath());
+
+
+                    System.out.println("Path requested: " + getInfo);
+                   /* if (getInfo.length() <= 1) {
+                        retMessage = returnHeaderHtml("src/resources/user1/index.html");
+                    } else*/
+                    if (requestedFile.isDirectory()) {
+                        retMessage = fNFHeader;
+                        System.out.println("Les byrd");
+                        File[] files = requestedFile.listFiles();
+                        //Only walks one level of directory (by task requirements).
+                        for (File file : files) {
+                            if (file.getName().equals("index.html")) {
+                                retMessage = returnHeaderHtml(file.getAbsolutePath());
+                                break;
+                            }
+                        }
+                    } else if (requestedFile.isFile()) {
+                        if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
+                            //Is png
+                            retMessage = returnHeaderHtml("src/resources/user1/index.html");
+                            streamPng(requestedFile, outputStream);
+
+                        } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
+                            retMessage = returnHeaderHtml(requestedFile.getAbsolutePath());
+                        }
+                    } else {
+                        retMessage = fNFHeader;
+                    }
+                }else {throw new UnsupportedOperationException("This server only handles HTTP:GET requests");}
             }
-
-
-
-            outputStream = new DataOutputStream(this.socket.getOutputStream());
-            //  Thread.sleep(10);
-            outputStream.write(message.getBytes());
+            if (!streamedPNG) {
+                outputStream = new DataOutputStream(this.socket.getOutputStream());
+                //  Thread.sleep(10);
+                outputStream.write(retMessage.getBytes());
+            }
         } catch (Exception e) {
             System.err.println("Exception in serverThread:\n" + e);
         }
-        //Connection is dead
-        try {
-            System.out.printf("TCP connection from %s:%d Was killed\n",
-                    socket.getInetAddress().getHostAddress(), socket.getPort());
-            socket.close();
-        } catch (
-                Exception e) {
-            System.err.println("Failed to close socket in thread: " + e);
+        if (!streamedPNG) {
+            //Kill connection
+            try {
+                System.out.printf("TCP connection from %s:%d Was killed\n",
+                        socket.getInetAddress().getHostAddress(), socket.getPort());
+                socket.close();
+            } catch (
+                    Exception e) {
+                System.err.println("Failed to close socket in thread: " + e);
+            }
         }
         return;
+    }
 
+    private void streamPng(File requestedFile, OutputStream outputStream) {
+        throw new UnsupportedOperationException("Have not implemented .png files yet");
+        //return;
+    }
+
+    String returnHeaderHtml(String path) {
+        StringBuilder retString = new StringBuilder();
+
+        File indexFile = new File(path);
+        System.out.println(indexFile.getAbsolutePath());
+        String indexContent = htmlFileToString(indexFile);
+
+        if (indexContent.length() > 0) {
+            retString.append(okHeader);
+            retString.append(htmlTypeHeader);
+            retString.append(contLength + indexContent.length() + emptySeperator);
+            retString.append(emptySeperator);
+            retString.append(indexContent);
+        }
+
+        return retString.toString();
     }
 
     /**
@@ -168,9 +217,6 @@ StringBuilder retMessageBuilder = new StringBuilder();
     String htmlFileToString(File htmlFile) {
         StringBuilder stringBuilder = new StringBuilder();
         String absPath = htmlFile.getAbsolutePath();
-        System.out.println("SHITEEEE");
-        System.out.println(absPath.substring(absPath.length() - 5));
-        System.out.println("");
         if (!htmlFile.isFile() || !absPath.substring(absPath.length() - 5).equals(".html")) {
             System.err.println(htmlFile.getAbsolutePath() + " is not an actual html file!");
         } else {
