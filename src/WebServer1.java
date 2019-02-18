@@ -266,6 +266,16 @@ class ServerThread extends Thread {
                 System.out.println("dsasasfd");
                 outputStream.write(retStringB.toString().getBytes());
                 System.out.println("fesfd" + outputStream.toString());
+                long index = 0;
+
+                //TODO REFACTOR
+                while (length - (index + bufsize) > 0) {
+                    index += bufsize;
+                }
+                if (length - index > 0) {
+                    int size = (int) (length - index);
+                    buf = new byte[size];
+                }
 
 
                 while (pictureInputStream.available() > 0) {
