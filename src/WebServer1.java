@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 /**
- * A for handeling multithreaded connections.
+ * A server class for handeling multithreaded connections.
  */
 
 
@@ -76,6 +76,9 @@ class ServerThread extends Thread {
 
     public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
             "Connection: close\r\n";
+
+    public final String closeHeader = "Connection: close\r\n";
+    public final String keepAliveHeader = "Connection: keep-alive\r\n";
     public final String contLength = "Content-Length: ";
     public final String emptySeperator = "\r\n";
 
@@ -146,16 +149,19 @@ class ServerThread extends Thread {
                     } else if (requestedFile.isFile()) {
                         if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
                             //Is png
-                            retMessage = returnHeaderHtml("src/resources/user1/index.html");
-                            streamPng(requestedFile, outputStream);
-
+                            //retMessage = returnHeaderHtml("src/resources/user1/index.html");
+                            streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
                         } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
+                            //Is html file
                             retMessage = returnHeaderHtml(requestedFile.getAbsolutePath());
                         }
                     } else {
+                        //Else, is not folder or directory.
                         retMessage = fNFHeader;
                     }
-                }else {throw new UnsupportedOperationException("This server only handles HTTP:GET requests");}
+                } else {
+                    throw new UnsupportedOperationException("This server only handles HTTP:GET requests");
+                }
             }
             if (!streamedPNG) {
                 outputStream = new DataOutputStream(this.socket.getOutputStream());
@@ -165,23 +171,18 @@ class ServerThread extends Thread {
         } catch (Exception e) {
             System.err.println("Exception in serverThread:\n" + e);
         }
-        if (!streamedPNG) {
-            //Kill connection
-            try {
-                System.out.printf("TCP connection from %s:%d Was killed\n",
-                        socket.getInetAddress().getHostAddress(), socket.getPort());
-                socket.close();
-            } catch (
-                    Exception e) {
-                System.err.println("Failed to close socket in thread: " + e);
-            }
+        //if (!streamedPNG) {
+        //Kill connection
+        try {
+            System.out.printf("TCP connection from %s:%d Was killed\n",
+                    socket.getInetAddress().getHostAddress(), socket.getPort());
+            socket.close();
+        } catch (
+                Exception e) {
+            System.err.println("Failed to close socket in thread: " + e);
         }
+        //}
         return;
-    }
-
-    private void streamPng(File requestedFile, OutputStream outputStream) {
-        throw new UnsupportedOperationException("Have not implemented .png files yet");
-        //return;
     }
 
     String returnHeaderHtml(String path) {
@@ -247,8 +248,58 @@ class ServerThread extends Thread {
         return ret;
     }
 
+    private void streamPng(File requestedFile, OutputStream outputStream) {
 
-    //TODO Remove
+        try {
+            InputStream pictureInputStream = new FileInputStream(requestedFile);
+            long length = requestedFile.length();
+            try {
+                StringBuilder retStringB = new StringBuilder();
+                retStringB.append(okHeader);
+                retStringB.append("Content-Type: image/png" + emptySeperator);
+                //retStringB.append(keepAliveHeader);//TODO VALIDATE!!
+                retStringB.append(closeHeader);
+                retStringB.append(contLength + length + emptySeperator);
+                retStringB.append(emptySeperator);
+                System.out.println(retStringB.toString());
+
+                System.out.println("dsasasfd");
+                outputStream.write(retStringB.toString().getBytes());
+                System.out.println("fesfd" + outputStream.toString());
+
+
+                while (pictureInputStream.available() > 0) {
+                    byte buf[] = new byte[bufsize];
+                    while (pictureInputStream.available() > 0 && buf[bufsize - 1] == 0) {
+                        pictureInputStream.read(buf);
+                    }
+                    System.out.println("Buffersize: " + trim(buf).length);
+                    outputStream.write(trim(buf));
+                }
+
+                //TODO remove
+                System.out.println("THIS IS STUPID:");
+                System.out.println(outputStream.toString());
+                outputStream.flush();//May be stupid
+                System.out.println(outputStream.toString());
+            } catch (Exception e) {
+                System.err.println("SHITEEEE failed at outputstream image \n" + e);
+                retMessage = fNFHeader;
+                return;
+            }
+
+        } catch (FileNotFoundException fNE) {//Validate shit twice
+            System.err.println("File not found");
+            retMessage = fNFHeader;
+            return;
+        }
+        streamedPNG = true;
+        return;
+
+//        throw new UnsupportedOperationException("Have not implemented .png files yet");
+        //return;
+    }
+//TODO Remove
 
     /**
      * Trim the buffer to the last ellement not equal to NULL
