@@ -82,7 +82,7 @@ class ServerThread extends Thread {
     public final String contLength = "Content-Length: ";
     public final String emptySeperator = "\r\n";
 
-
+    public boolean hasRuned = false;
     byte[] buf;
     InputStream inputStream;
     OutputStream outputStream;
@@ -100,15 +100,17 @@ class ServerThread extends Thread {
 
     @Override
     public void run() {
+
         StringBuilder retMessageBuilder = new StringBuilder();
         try {
             inputStream = new DataInputStream(this.socket.getInputStream());
-            while (inputStream.available() == 0) {
-                System.out.println("STUPID");
-            }
+            /*while (inputStream.available() == 0) {
+                if (hasRuned) System.out.println("STUPID");
+            }*/
             boolean runIndefinitely = true;//ANALYSE UNTIL FALSE
 
             while (runIndefinitely) {
+
                 runIndefinitely = false;
                 byte[] buf = new byte[bufsize];//Create buffer
                 //Read inputStream to buf while stream is streaming and buf is not full
@@ -171,6 +173,8 @@ class ServerThread extends Thread {
         } catch (Exception e) {
             System.err.println("Exception in serverThread:\n" + e);
         }
+
+        //TODO CLean
         //if (!streamedPNG) {
         //Kill connection
         try {
@@ -249,10 +253,11 @@ class ServerThread extends Thread {
     }
 
     private void streamPng(File requestedFile, OutputStream outputStream) {
+        hasRuned = true;
 
         try {
             InputStream pictureInputStream = new FileInputStream(requestedFile);
-            long length = requestedFile.length();
+            final long length = requestedFile.length();
             try {
                 StringBuilder retStringB = new StringBuilder();
                 retStringB.append(okHeader);
@@ -262,36 +267,27 @@ class ServerThread extends Thread {
                 retStringB.append(contLength + length + emptySeperator);
                 retStringB.append(emptySeperator);
                 System.out.println(retStringB.toString());
-
-                System.out.println("dsasasfd");
                 outputStream.write(retStringB.toString().getBytes());
-                System.out.println("fesfd" + outputStream.toString());
-                long index = 0;
 
-                //TODO REFACTOR
+                //Iterate imageBytes
+                long index = 0;
                 while (length - (index + bufsize) > 0) {
+                    buf = new byte[bufsize];
+                    pictureInputStream.read(buf);
+                    outputStream.write(buf);
                     index += bufsize;
                 }
                 if (length - index > 0) {
                     int size = (int) (length - index);
                     buf = new byte[size];
+                    pictureInputStream.read(buf);
+                    outputStream.write(buf);
+                    System.out.println("Actual size: " + (index + buf.length));
+                    index += buf.length;
                 }
-
-
-                while (pictureInputStream.available() > 0) {
-                    byte buf[] = new byte[bufsize];
-                    while (pictureInputStream.available() > 0 && buf[bufsize - 1] == 0) {
-                        pictureInputStream.read(buf);
-                    }
-                    System.out.println("Buffersize: " + trim(buf).length);
-                    outputStream.write(trim(buf));
-                }
-
-                //TODO remove
-                System.out.println("THIS IS STUPID:");
-                System.out.println(outputStream.toString());
                 outputStream.flush();//May be stupid
-                System.out.println(outputStream.toString());
+                outputStream.close();
+
             } catch (Exception e) {
                 System.err.println("SHITEEEE failed at outputstream image \n" + e);
                 retMessage = fNFHeader;
@@ -303,11 +299,9 @@ class ServerThread extends Thread {
             retMessage = fNFHeader;
             return;
         }
+        hasRuned = true;
         streamedPNG = true;
         return;
-
-//        throw new UnsupportedOperationException("Have not implemented .png files yet");
-        //return;
     }
 //TODO Remove
 
@@ -317,6 +311,7 @@ class ServerThread extends Thread {
      * @param bytes
      * @return
      */
+    /*
     static byte[] trim(byte[] bytes) {
         int i = bytes.length - 1;
         while (i >= 0 && bytes[i] == 0) {
@@ -324,5 +319,5 @@ class ServerThread extends Thread {
         }
 
         return Arrays.copyOf(bytes, i + 1);
-    }
+    }*/
 }
