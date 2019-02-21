@@ -48,7 +48,6 @@ public class WebServer1 {
     public static void main(String[] args) throws IOException {
 
         ServerSocket serverSocket = new ServerSocket(MYPORT);
-        int count = 0;
         while (true) {
             Socket socket = serverSocket.accept();
             System.out.println();
@@ -61,6 +60,7 @@ public class WebServer1 {
         }
     }
 }
+//ALLA ANVÄNDA variabblar måste ligga i thread.
 
 /**
  * Class for handeling threads
@@ -73,6 +73,10 @@ class ServerThread extends Thread {
 
     public final String okHeader = "HTTP/1.1 200 OK\r\n";
     public final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
+    public final String forbiddenHeader = "HTTP/1.1 403 Forbidden\r\n";
+    public final String serverErrorHeader = "HTTP/1.1 500 Internal Server Error\r\n";
+    public final String badRequestHeader = "HTTP/1.1 400 Bad Request\r\n";
+
 
     public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
             "Connection: close\r\n";
@@ -100,8 +104,9 @@ class ServerThread extends Thread {
 
     @Override
     public void run() {
+        boolean isDead = false;
 
-        StringBuilder retMessageBuilder = new StringBuilder();
+        StringBuilder retMessageBuilder;
         try {
             inputStream = new DataInputStream(this.socket.getInputStream());
             /*while (inputStream.available() == 0) {
@@ -118,7 +123,7 @@ class ServerThread extends Thread {
                     inputStream.read(buf); //TODO, analyse this
                 }
                 //Extract information(get)
-                String rHeader = new String(buf);//receivedHeader
+                String rHeader = new String(trim(buf));//receivedHeader
                 int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
 
                 if (getIndex >= 0) {
@@ -128,64 +133,77 @@ class ServerThread extends Thread {
                     String getInfo = extractInfo(rHeader, getIndex);
                     getInfo = getInfo.substring(getInfo.indexOf('/'));
                     getInfo = getInfo.substring(0, getInfo.indexOf(' '));
+                    String sForbidden = "forbidden"; //Search for Forbidden
+                    String sSven = "sven";            //Search for Sven
+                    if (getInfo.length() >= (sForbidden.length() + 1) && getInfo.substring(1, sForbidden.length() + 1).equals(sForbidden)) {
+                        retMessage = forbiddenHeader;
+                    } else if (getInfo.length() >= (sSven.length() + 1) && getInfo.substring(1, sSven.length() + 1).equals(sSven)) {
+                        retMessageBuilder = new StringBuilder();
+                        retMessageBuilder.append("HTTP/1.1 302 Found" + emptySeperator);
+                        retMessageBuilder.append("Location: http://lmgtfy.com/?q=sven" + emptySeperator);
+                        retMessage = retMessageBuilder.toString();
 
-                    File requestedFile = new File("src/resources" + getInfo);
-                    System.out.println(requestedFile.getAbsolutePath());
-
-
-                    System.out.println("Path requested: " + getInfo);
-                   /* if (getInfo.length() <= 1) {
-                        retMessage = returnHeaderHtml("src/resources/user1/index.html");
-                    } else*/
-                    if (requestedFile.isDirectory()) {
-                        retMessage = fNFHeader;
-                        System.out.println("Les byrd");
-                        File[] files = requestedFile.listFiles();
-                        //Only walks one level of directory (by task requirements).
-                        for (File file : files) {
-                            if (file.getName().equals("index.html")) {
-                                retMessage = returnHeaderHtml(file.getAbsolutePath());
-                                break;
-                            }
-                        }
-                    } else if (requestedFile.isFile()) {
-                        if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
-                            //Is png
-                            //retMessage = returnHeaderHtml("src/resources/user1/index.html");
-                            streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
-                        } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
-                            //Is html file
-                            retMessage = returnHeaderHtml(requestedFile.getAbsolutePath());
-                        }
                     } else {
-                        //Else, is not folder or directory.
-                        retMessage = fNFHeader;
+
+                        File requestedFile = new File("src/resources" + getInfo);
+                        System.out.println("Is directory: "+requestedFile.isDirectory()+", or is file: "+requestedFile.isFile());
+                        System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
+                        System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
+                        if (requestedFile.isDirectory()) {
+                            System.out.println("Les byrd");
+                            retMessage = fNFHeader;
+                            File[] files = requestedFile.listFiles();
+                            //Only walks one level of directory (by task requirements).
+                            for (File file : files) {
+                                if (file.getName().equals("index.html")) {
+                                    retMessage = returnHeaderHtml(file.getAbsolutePath());
+                                    break;
+                                }
+                            }
+                        } else if (requestedFile.isFile()) {
+                            if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
+                                //Is png
+                                //retMessage = returnHeaderHtml("src/resources/user1/index.html");
+                                streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
+                            } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
+                                //Is html file
+                                retMessage = returnHeaderHtml(requestedFile.getAbsolutePath());
+                            }
+                        } else {
+                            //Else, is not file or directory.
+                            retMessage = fNFHeader;
+                        }
                     }
                 } else {
-                    throw new UnsupportedOperationException("This server only handles HTTP:GET requests");
+                    //retMessage = badRequestHeader;
+                    System.out.println("You are stupid port: " + socket.getPort());
+                    socket.close();
+                    isDead = true;
+                    //throw new UnsupportedOperationException("This server only handles HTTP:GET requests stupid port: " + socket.getPort());
                 }
             }
-            if (!streamedPNG) {
+            if (!streamedPNG && !isDead) {
                 outputStream = new DataOutputStream(this.socket.getOutputStream());
                 //  Thread.sleep(10);
                 outputStream.write(retMessage.getBytes());
+                System.out.println("Sent to port: " + socket.getPort() + ":\n" + retMessage);
             }
         } catch (Exception e) {
             System.err.println("Exception in serverThread:\n" + e);
         }
 
         //TODO CLean
-        //if (!streamedPNG) {
-        //Kill connection
-        try {
-            System.out.printf("TCP connection from %s:%d Was killed\n",
-                    socket.getInetAddress().getHostAddress(), socket.getPort());
-            socket.close();
-        } catch (
-                Exception e) {
-            System.err.println("Failed to close socket in thread: " + e);
+        if (!isDead) {
+            //Kill connection
+            try {
+                System.out.printf("TCP connection from %s:%d Was killed\n",
+                        socket.getInetAddress().getHostAddress(), socket.getPort());
+                socket.close();
+            } catch (
+                    Exception e) {
+                System.err.println("Failed to close socket in thread: " + e);
+            }
         }
-        //}
         return;
     }
 
@@ -193,7 +211,6 @@ class ServerThread extends Thread {
         StringBuilder retString = new StringBuilder();
 
         File indexFile = new File(path);
-        System.out.println(indexFile.getAbsolutePath());
         String indexContent = htmlFileToString(indexFile);
 
         if (indexContent.length() > 0) {
@@ -266,7 +283,6 @@ class ServerThread extends Thread {
                 retStringB.append(closeHeader);
                 retStringB.append(contLength + length + emptySeperator);
                 retStringB.append(emptySeperator);
-                System.out.println(retStringB.toString());
                 outputStream.write(retStringB.toString().getBytes());
 
                 //Iterate imageBytes
@@ -282,7 +298,6 @@ class ServerThread extends Thread {
                     buf = new byte[size];
                     pictureInputStream.read(buf);
                     outputStream.write(buf);
-                    System.out.println("Actual size: " + (index + buf.length));
                     index += buf.length;
                 }
                 outputStream.flush();//May be stupid
@@ -311,7 +326,7 @@ class ServerThread extends Thread {
      * @param bytes
      * @return
      */
-    /*
+
     static byte[] trim(byte[] bytes) {
         int i = bytes.length - 1;
         while (i >= 0 && bytes[i] == 0) {
@@ -319,5 +334,5 @@ class ServerThread extends Thread {
         }
 
         return Arrays.copyOf(bytes, i + 1);
-    }*/
+    }
 }
