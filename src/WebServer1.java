@@ -145,8 +145,8 @@ class ServerThread extends Thread {
 
                     } else {
 
-                        File requestedFile = new File("src/resources" + getInfo);
-                        System.out.println("Is directory: "+requestedFile.isDirectory()+", or is file: "+requestedFile.isFile());
+                        File requestedFile = new File("resources" + getInfo);
+                        System.out.println("Is directory: " + requestedFile.isDirectory() + ", or is file: " + requestedFile.isFile());
                         System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
                         System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
                         if (requestedFile.isDirectory()) {
