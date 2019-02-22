@@ -110,79 +110,100 @@ class ServerThread extends Thread {
             inputStream = new DataInputStream(this.socket.getInputStream());
 
             boolean runIndefinitely = true; //ANALYSE UNTIL FALSE, if ever implementing enormous
-                                            // httpRequests(like 1000 Subirectories)
-            while (runIndefinitely) {
+            // httpRequests(like 1000 Subirectories)
 
-                runIndefinitely = false;
-                byte[] buf = new byte[bufsize];//Create buffer
-                //Read inputStream to buf while stream is streaming and buf is not full
-                while (inputStream.available() > 0 && buf[bufsize - 1] == 0) {
-                    inputStream.read(buf); //TODO, analyse this
-                }
-                //Extract information(get)
-                String rHeader = new String(trim(buf));//receivedHeader
-                int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
+            byte[] buf = new byte[bufsize];//Create buffer
+            //Read inputStream to buf while stream is streaming and buf is not full
+            //TODO change back to ">0" instead of ">=0"
 
-                if (getIndex >= 0) {
-                    /**
-                     * HERE only implemented "GET", nest else if for implementation of "POST" and "PUT"
-                     */
-                    String getInfo = extractInfo(rHeader, getIndex);
-                    getInfo = getInfo.substring(getInfo.indexOf('/'));
-                    getInfo = getInfo.substring(0, getInfo.indexOf(' '));
-                    String sForbidden = "forbidden";//Search for Forbidden
-                    String sSven = "sven";          //Search for Sven
-                    String sKill = "kill_yourself"; //Search Kill, Used to throw exception.
-                    if (getInfo.length() >= (sForbidden.length() + 1) && getInfo.substring(1, sForbidden.length() + 1).equals(sForbidden)) {
-                        retMessage = forbiddenHeader;
-                    } else if (getInfo.length() >= (sSven.length() + 1) && getInfo.substring(1, sSven.length() + 1).equals(sSven)) {
-                        retMessageBuilder = new StringBuilder();
-                        retMessageBuilder.append("HTTP/1.1 302 Found" + emptySeperator);
-                        retMessageBuilder.append("Location: http://lmgtfy.com/?q=sven" + emptySeperator);
-                        retMessage = retMessageBuilder.toString();
-                    } else if (getInfo.length() >= (sKill.length() + 1) && getInfo.substring(1, sKill.length() + 1).equals(sKill)) {
-                        throw new IllegalReceiveException("I'm sorry " + socket.getPort() + ", I'm afraid I can't do that");
-                    } else {
-                        //Is a valid request
-                        File requestedFile = new File("resources" + getInfo);
-                        System.out.println("Is directory: " + requestedFile.isDirectory() + ", or is file: " + requestedFile.isFile());
-                        System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
-                        System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
-                        if (requestedFile.isDirectory()) {
-                            System.out.println("Les byrd");
-                            retMessage = fNFHeader;
-                            File[] files = requestedFile.listFiles();
-                            //Only walks one level of directory (by task requirements).
-                            for (File file : files) {
-                                if (file.getName().equals("index.html")) {
-                                    retMessage = returnHeaderHtml(file.getAbsolutePath());
-                                    break;
-                                }
-                            }
-                        } else if (requestedFile.isFile()) {
-                            if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
-                                //Is png
-                                //retMessage = returnHeaderHtml("src/resources/user1/index.html");
-                                streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
-                            } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
-                                //Is html file
-                                String temp = returnHeaderHtml(requestedFile.getAbsolutePath());
-                                if (temp.length() > 0) {
-                                    retMessage = temp;
-                                }//else retMessage is serverError
-                            }
-                        } else {
-                            //Else, is not file or directory.
-                            retMessage = fNFHeader;
-                        }
+            int deadTimeOut = 10000;//==10 seconds
+            int index = 0;
+            long start = System.currentTimeMillis();
+            while (runIndefinitely && buf[bufsize - 1] == 0 && (System.currentTimeMillis() - start) < deadTimeOut) {
+                int bytesAvailible = inputStream.available();
+                if (bytesAvailible > 0) {
+                    if (index + bytesAvailible >= bufsize) {
+                        //runIndefinitely = false;
+                        break;
                     }
-                } else {
-                    //Usually an empty request, if other request type, support should be added
-                    //All these cases are completely ignored.
-                    System.out.println("You are stupid port: " + socket.getPort() + "This server only handles HTTP:GET requests");
-                    socket.close();
-                    isDead = true;
+                    int i = 0;
+                    inputStream.read(buf, index, bytesAvailible);
+                    index += bytesAvailible;
+                    if (index > 4 && new String(buf).substring(index - 4, index).equals(emptySeperator + emptySeperator)) {
+                        //runIndefinitely = false;
+                        break;
+                    }
                 }
+                //inputStream.read(buf); //TODO, analyse this
+                //char temp = (char)buf[i];
+                //if(temp=='\r')
+            }
+            if (!(buf[bufsize - 1] == 0)) {
+                System.err.println("Geek, full fucking buffer");
+            }
+            //Extract information(get)
+            String rHeader = new String(trim(buf));//receivedHeader
+            int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
+
+            if (getIndex >= 0) {
+                /**
+                 * HERE only implemented "GET", nest else if for implementation of "POST" and "PUT"
+                 */
+                String getInfo = extractInfo(rHeader, getIndex);
+                getInfo = getInfo.substring(getInfo.indexOf('/'));
+                getInfo = getInfo.substring(0, getInfo.indexOf(' '));
+                String sForbidden = "forbidden";//Search for Forbidden
+                String sSven = "sven";          //Search for Sven
+                String sKill = "kill_yourself"; //Search Kill, Used to throw exception.
+                if (getInfo.length() >= (sForbidden.length() + 1) && getInfo.substring(1, sForbidden.length() + 1).equals(sForbidden)) {
+                    retMessage = forbiddenHeader;
+                } else if (getInfo.length() >= (sSven.length() + 1) && getInfo.substring(1, sSven.length() + 1).equals(sSven)) {
+                    retMessageBuilder = new StringBuilder();
+                    retMessageBuilder.append("HTTP/1.1 302 Found" + emptySeperator);
+                    retMessageBuilder.append("Location: http://lmgtfy.com/?q=sven" + emptySeperator);
+                    retMessage = retMessageBuilder.toString();
+                } else if (getInfo.length() >= (sKill.length() + 1) && getInfo.substring(1, sKill.length() + 1).equals(sKill)) {
+                    throw new IllegalReceiveException("I'm sorry " + socket.getPort() + ", I'm afraid I can't do that");
+                } else {
+                    //Is a valid request
+                    File requestedFile = new File("resources" + getInfo);
+                    System.out.println("Is directory: " + requestedFile.isDirectory() + ", or is file: " + requestedFile.isFile());
+                    System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
+                    System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
+                    if (requestedFile.isDirectory()) {
+                        System.out.println("Les byrd");
+                        retMessage = fNFHeader;
+                        File[] files = requestedFile.listFiles();
+                        //Only walks one level of directory (by task requirements).
+                        for (File file : files) {
+                            if (file.getName().equals("index.html")) {
+                                retMessage = returnHeaderHtml(file.getAbsolutePath());
+                                break;
+                            }
+                        }
+                    } else if (requestedFile.isFile()) {
+                        if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
+                            //Is png
+                            //retMessage = returnHeaderHtml("src/resources/user1/index.html");
+                            streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
+                        } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
+                            //Is html file
+                            String temp = returnHeaderHtml(requestedFile.getAbsolutePath());
+                            if (temp.length() > 0) {
+                                retMessage = temp;
+                            }//else retMessage is serverError
+                        }
+                    } else {
+                        //Else, is not file or directory.
+                        retMessage = fNFHeader;
+                    }
+                }
+            } else {
+                //Usually an empty request, if other request type, support should be added
+                //All these cases are completely ignored.
+                System.out.println("You are stupid port: " + socket.getPort() + " This server only handles HTTP:GET requests");
+                socket.close();
+                isDead = true;
             }
             if (!streamedPNG && !isDead) {
                 outputStream = new DataOutputStream(this.socket.getOutputStream());
