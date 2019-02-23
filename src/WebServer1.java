@@ -114,32 +114,26 @@ class ServerThread extends Thread {
 
             byte[] buf = new byte[bufsize];//Create buffer
             //Read inputStream to buf while stream is streaming and buf is not full
-            //TODO change back to ">0" instead of ">=0"
 
-            int deadTimeOut = 10000;//==10 seconds
+            int deadTimeOut = 10000;//==10 seconds(when using telnet, use 1 hour = 3600000)
             int index = 0;
             long start = System.currentTimeMillis();
             while (runIndefinitely && buf[bufsize - 1] == 0 && (System.currentTimeMillis() - start) < deadTimeOut) {
                 int bytesAvailible = inputStream.available();
                 if (bytesAvailible > 0) {
                     if (index + bytesAvailible >= bufsize) {
-                        //runIndefinitely = false;
                         break;
                     }
                     int i = 0;
                     inputStream.read(buf, index, bytesAvailible);
                     index += bytesAvailible;
                     if (index > 4 && new String(buf).substring(index - 4, index).equals(emptySeperator + emptySeperator)) {
-                        //runIndefinitely = false;
                         break;
                     }
                 }
-                //inputStream.read(buf); //TODO, analyse this
-                //char temp = (char)buf[i];
-                //if(temp=='\r')
             }
             if (!(buf[bufsize - 1] == 0)) {
-                System.err.println("Geek, full fucking buffer");
+                System.err.println("Geek, full fucking buffer");//Should maybe see if got a post, and then thread it.
             }
             //Extract information(get)
             String rHeader = new String(trim(buf));//receivedHeader
