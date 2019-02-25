@@ -351,7 +351,6 @@ class ServerThread extends Thread {
     }
 
 
-    //TODO Remove
 
     /**
      * Trim the buffer to the last ellement not equal to NULL
