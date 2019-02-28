@@ -24,7 +24,7 @@ import java.util.Arrays;
 
 
 public class WebServer1 {
-    public static final int BUFSIZE = 32768;    //=2^15
+    public static final int BUFSIZE = 256;//32768;    //=2^15
     /*  Would have the buffer set to 1024, but since a normal GET header could possible reach more than 1024 bytes
     I would have loved to loop it for annalasys.
     But since that would be huge effort, and i only need to read the header until the end of header, and if PUT
@@ -32,6 +32,7 @@ public class WebServer1 {
     Big png files.
     So i configure it to 1/2 the maximal size of a TCP package of 2^16 bytes.
      */
+
     public static final int MYPORT = 8889;
 
     private static final String HTMLBODY = "<!DOCTYPE html>\n" +
@@ -72,27 +73,28 @@ public class WebServer1 {
  * Clas for handeling threads
  */
 class ServerThread extends Thread {
-    private Socket socket;
-    private int bufsize;
-    private String retMessage = "";
-    private boolean streamedPNG = false;
+    Socket socket;
+    int bufsize;
+    String retMessage = "";
+    boolean streamedPNG = false;
 
-    private final String okHeader = "HTTP/1.1 200 OK\r\n";
-    private final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
-    private final String forbiddenHeader = "HTTP/1.1 403 Forbidden\r\n";
-    private final String serverErrorHeader = "HTTP/1.1 500 Internal Server Error\r\n";
-    private final String badRequestHeader = "HTTP/1.1 400 Bad Request\r\n";
+    public final String okHeader = "HTTP/1.1 200 OK\r\n";
+    public final String fNFHeader = "HTTP/1.1 404 Not Found\r\n";//File not found
+    public final String forbiddenHeader = "HTTP/1.1 403 Forbidden\r\n";
+    public final String serverErrorHeader = "HTTP/1.1 500 Internal Server Error\r\n";
+    public final String serverNotImplementedHeader = "HTTP/1.1 501 Not Implemented\r\n";
+    public final String badRequestHeader = "HTTP/1.1 400 Bad Request\r\n";
 
 
-    private final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
+    public final String htmlTypeHeader = "Content-Type: text/html;charset=UTF-8\r\n" +
             "Connection: close\r\n";
 
-    private final String closeHeader = "Connection: close\r\n";
-    private final String keepAliveHeader = "Connection: keep-alive\r\n";
-    private final String contLength = "Content-Length: ";
-    private final String emptySeperator = "\r\n";
+    public final String closeHeader = "Connection: close\r\n";
+    public final String keepAliveHeader = "Connection: keep-alive\r\n";
+    public final String contLength = "Content-Length: ";
+    public final String emptySeperator = "\r\n";
 
-    boolean hasRuned = false;
+    public boolean hasRuned = false;
     byte[] buf;
     InputStream inputStream;
     OutputStream outputStream;
@@ -122,28 +124,39 @@ class ServerThread extends Thread {
             byte[] buf = new byte[bufsize];//Create buffer
             //Read inputStream to buf while stream is streaming and buf is not full
 
-            int deadTimeOut = 10000;//==10 seconds(when using telnet, use 1 hour = 3600000)
-            int index = 0;
+            int deadTimeOut = 3600000;//10000;//==10 seconds(when using telnet, use 1 hour = 3600000)
+            int length = 0;
+            int bytesToRead = inputStream.available();
             long start = System.currentTimeMillis();
-            while (runIndefinitely && buf[bufsize - 1] == 0 && (System.currentTimeMillis() - start) < deadTimeOut) {
-                int bytesAvailible = inputStream.available();
-                if (bytesAvailible > 0) {
-                    if (index + bytesAvailible >= bufsize) {
-                        break;
-                    }
-                    int i = 0;
-                    inputStream.read(buf, index, bytesAvailible);
-                    index += bytesAvailible;
-                    if (index > 4 && new String(buf).substring(index - 4, index).equals(emptySeperator + emptySeperator)) {
+
+            while (runIndefinitely && length + length + bytesToRead < bufsize && (System.currentTimeMillis() - start) < deadTimeOut) {
+                if (length > 0 && length + bytesToRead >= bufsize) {
+                    System.err.println("Buffer is already read to, i do not support overwritting contents of buffer");
+                    break;
+                }
+                if (bytesToRead > 0) {
+                    System.out.println("Length before: " + length);
+                    int tempLength = length;
+                    length = inputStream.read(buf, length, length + bytesToRead);
+                    length = length + tempLength;
+                    System.out.println("Length after:  " + length);
+                    if (length > 4 && new String(buf).substring(length - 4, length).equals(emptySeperator + emptySeperator)) {
                         break;
                     }
                 }
+                bytesToRead = inputStream.available();
             }
-            if (!(buf[bufsize - 1] == 0)) {
-                System.err.println("Geek, full fucking buffer");//Should maybe see if got a post, and then thread it.
+            if (length + length + bytesToRead >= bufsize) {
+                System.err.println("Do not support messegessize (" + (length + inputStream.available()) + "), which is larger than buffer size of: " + bufsize + " Bytes.\n" +
+                        "Port " + socket.getPort() + " is a fucking shitting hacker trying to hack itself back in time!");//Cheating is pronouned shitting in swenglish
+                //  retMessage = serverNotImplementedHeader;
+                //    outputStream = socket.getOutputStream();
+                // outputStream.write(retMessage.getBytes());
             }
+
+            //TODO adjust this acording to fix to echo server
             //Extract information(get)
-            String rHeader = new String(trim(buf));//receivedHeader
+            String rHeader = new String(buf);//receivedHeader
             int getIndex = findGet(rHeader);//If i read line by line it would be index0-3
 
             if (getIndex >= 0) {
@@ -172,7 +185,6 @@ class ServerThread extends Thread {
                     System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
                     System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
                     if (requestedFile.isDirectory()) {
-                        System.out.println("Les byrd");
                         retMessage = fNFHeader;
                         File[] files = requestedFile.listFiles();
                         //Only walks one level of directory (by task requirements).
@@ -202,7 +214,7 @@ class ServerThread extends Thread {
             } else {
                 //Usually an empty request, if other request type, support should be added
                 //All these cases are completely ignored.
-                System.out.println("You are stupid, therefore you will die port:\n" + socket.getPort() + " This server only handles HTTP:GET requests");
+                System.out.println("You are stupid port: " + socket.getPort() + " This server only handles HTTP:GET requests");
                 socket.close();
                 isDead = true;
             }
