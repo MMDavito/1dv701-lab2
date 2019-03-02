@@ -26,7 +26,7 @@ import java.util.Arrays;
 public class WebServer1 {
     public static final int BUFSIZE = 32768;    //=2^15
     /*  Would have the buffer set to 1024, but since a normal GET header could possible reach more than 1024 bytes
-    I would have loved to loop it for annalasys.
+    I would have loved to loop it for analysis.
     But since that would be huge effort, and i only need to read the header until the end of header, and if PUT
     or POST simply send the stream to a new thread. i see no reason to have this large buffer except for returning
     Big png files.
@@ -34,33 +34,12 @@ public class WebServer1 {
      */
     public static final int MYPORT = 8889;
 
-    private static final String HTMLBODY = "<!DOCTYPE html>\n" +
-            "<html lang=\"en\">\n" +
-            "<head>\n" +
-            "    <meta charset=\"UTF-8\">\n" +
-            "    <title>Title</title>\n" +
-            "</head>\n" +
-            "<body>\n" +
-            "HELLO FUCKING WORLD\n" +
-            "</body>\n" +
-            "</html>";
-
-    public static final String RETURNMESSAGE =
-            "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/html;charset=UTF-8\r\n" +
-                    "Connection: close\r\n" +
-                    "Content-Length: " + HTMLBODY.length() + " \r\n" +
-                    "\r\n" +//End of header
-
-                    HTMLBODY;
-
     public static void main(String[] args) throws IOException {
 
         ServerSocket serverSocket = new ServerSocket(MYPORT);
         while (true) {
             Socket socket = serverSocket.accept();
-            System.out.println();
-            System.out.printf("TCP connection accepted from %s:%d\n",
+            System.out.printf("\nTCP connection accepted from %s:%d\n",
                     socket.getInetAddress().getHostAddress(), socket.getPort());
             ServerThread serverThread = new ServerThread(socket, BUFSIZE);
             serverThread.start();
@@ -153,6 +132,7 @@ class ServerThread extends Thread {
                 String getInfo = extractInfo(rHeader, getIndex);
                 getInfo = getInfo.substring(getInfo.indexOf('/'));
                 getInfo = getInfo.substring(0, getInfo.indexOf(' '));
+
                 String sForbidden = "forbidden";//Search for Forbidden
                 String sSven = "sven";          //Search for Sven
                 String sKill = "kill_yourself"; //Search Kill, Used to throw exception.
@@ -168,11 +148,7 @@ class ServerThread extends Thread {
                 } else {
                     //Is a valid request
                     File requestedFile = new File("resources" + getInfo);
-                    System.out.println("Is directory: " + requestedFile.isDirectory() + ", or is file: " + requestedFile.isFile());
-                    System.out.println("Path requested: " + getInfo + ", by port: " + socket.getPort());
-                    System.out.println("File: " + requestedFile.getName() + ", requested by port: " + socket.getPort());
                     if (requestedFile.isDirectory()) {
-                        System.out.println("Les byrd");
                         retMessage = fNFHeader;
                         File[] files = requestedFile.listFiles();
                         //Only walks one level of directory (by task requirements).
@@ -185,7 +161,6 @@ class ServerThread extends Thread {
                     } else if (requestedFile.isFile()) {
                         if (getInfo.substring(getInfo.length() - 4).equals(".png")) {
                             //Is png
-                            //retMessage = returnHeaderHtml("src/resources/user1/index.html");
                             streamPng(requestedFile, new DataOutputStream(this.socket.getOutputStream()));
                         } else if (getInfo.length() > 5 && getInfo.substring(getInfo.length() - 5).equals(".html")) {
                             //Is html file
@@ -202,7 +177,7 @@ class ServerThread extends Thread {
             } else {
                 //Usually an empty request, if other request type, support should be added
                 //All these cases are completely ignored.
-                System.out.println("You are stupid, therefore you will die port:\n" + socket.getPort() + " This server only handles HTTP:GET requests");
+                System.err.println("You are stupid, therefore you will die port:\n" + socket.getPort() + " This server only handles HTTP:GET requests");
                 socket.close();
                 isDead = true;
             }
@@ -210,7 +185,6 @@ class ServerThread extends Thread {
                 outputStream = new DataOutputStream(this.socket.getOutputStream());
                 //  Thread.sleep(10);
                 outputStream.write(retMessage.getBytes());
-                System.out.println("Sent to port: " + socket.getPort() + ":\n" + retMessage);
             }
         } catch (Exception e) {
             System.err.println("Exception in serverThread:\n" + e);
