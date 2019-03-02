@@ -93,6 +93,9 @@ class ServerThread extends Thread {
 
         StringBuilder retMessageBuilder;
         try {
+            //TODO Change if you write telnet slowly
+            int deadTimeOut = 10000;//==10 seconds(when using telnet, use 1 hour = 3600000)
+
             inputStream = new DataInputStream(this.socket.getInputStream());
 
             boolean runIndefinitely = true; //ANALYSE UNTIL FALSE, if ever implementing enormous
@@ -101,7 +104,6 @@ class ServerThread extends Thread {
             byte[] buf = new byte[bufsize];//Create buffer
             //Read inputStream to buf while stream is streaming and buf is not full
 
-            int deadTimeOut = 10000;//==10 seconds(when using telnet, use 1 hour = 3600000)
             int index = 0;
             long start = System.currentTimeMillis();
             while (runIndefinitely && buf[bufsize - 1] == 0 && (System.currentTimeMillis() - start) < deadTimeOut) {
